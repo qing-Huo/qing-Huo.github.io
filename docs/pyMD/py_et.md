@@ -907,3 +907,706 @@ def fire_bullet(ai_settings,screen,ship,bullets): #-------------新增
 函数 `fire_bullet()` 只包含玩家按空格时用于发射子弹的代码。
 
 ## 外星人篇
+
+首先在屏幕边缘添加一个外星人，然后生成一群外星人。让这群外星人向两边和下面移动，并删除被子弹击中的外星人
+
+本章将会深入 pygame 和  大型项目的管理
+
+目前每次测试新功能而运行游戏时，都必须使用鼠标来关闭它，太繁琐！现在我们增加一个结束游戏的快捷键 Q，
+
+```py
+> cat game_functions.py
+def check_keydown_events(event,ai_settings,screen,ship,bullets):
+    """响应按下"""
+--snip--
+    elif event.key == pygame.K_q:      #-----------新增
+        sys.exit()      #-----------新增
+```
+
+### 创建第一个外星人
+
+与在屏幕上放置飞船类似。每个外星人的行为都由 `Alien` 类控制，我们像创建 Ship 类那样创建这个类。处于简化考虑，使用外星人图片
+
+#### 创建 Alien 类
+
+```py
+> cat alien.py
+import pygame
+from pygame.sprite import Sprite
+
+class Alien(Sprite):
+    """表示单个外星人的类"""
+
+    def __init__(self, ai_settings,screen):
+        """初始化外星人并设置其起始位置"""
+        super(Alien,self).__init__()
+        self.screen = screen
+        self.ai_settings = ai_settings
+
+        # 加载外星人图像，并设置其 rect 属性
+        self.image = pygame.image.load('images/alien.bmp')
+        self.rect = self.image.get_rect()
+
+        # 每个外星人最初都在屏幕左上角附近
+        self.rect.x = self.rect.width
+        self.rect.y = self.rect.height
+
+        # 存储外星人的准确位置
+        self.x = float(self.rect.x)
+
+    def blitme(self):
+        """在指定位置绘制外星人"""
+        self.screen.blit(self.image ,self.rect)
+```
+
+除了位置不同，这个类的大部分代码都和 Ship 类相似。每个外星人最初都位于屏幕左上角附近
+
+#### 创建 Alien 实例
+
+现在在 alien_invasion.py 中创建一个 Alien 实例
+
+```py
+> cat alien_invasion.py
+--snip--
+    bullets = Group()
+    # 创建一个外星人
+    alien = Alien(ai_settings,screen) #-------------新增
+
+    #开始游戏的主循环
+--snip--
+    while True:
+        gf.update_screen(ai_settings,screen,ship,alien,bullets) #-------------新增函数参数 alien
+run_game()
+```
+
+#### 让外星人出现在屏幕上
+
+为了显示外星人，我们在 `update_screen()` 中调用其方法 `blitme()`
+
+```py
+> cat game_functions.py
+--snip--
+def update_screen(ai_settings,screen,ship,alien,bullets): #-------------新增函数参数 alien
+    """更新屏幕的图像，并切换到新屏幕"""
+--snip--
+    for bullet in bullets:
+        bullet.draw_bullet()
+    ship.blitme()
+    # 显示外星人
+    alien.blitme() #-------------新增
+--snip--
+```
+
+现在外星人可以正常显示了，接下来编写一群外星人的代码
+
+![Alien](../images/et/alien.png) 
+
+### 创建一群外星人
+
+要绘制一群外星人，需要确定一行共能容纳多少个外星人以及要绘制多少行外星人。
+
+我们将首先计算外星人之兴建的水平间距，并创建一行外星人，再确定可用的垂直空间，并创建整群外星人
+
+#### 确定一行可容纳多少个外星人
+
+为确定一行可容纳多少外星人，我们先看看可用的水平空间有多大。屏幕宽度存储在 `ai_settings.screen_width` 中，但需要在屏幕两边都留下一定的边距，把它设置为外星人的宽度。由于有两个边距，因此可用于放置外星人的水平空间为*屏幕宽度减去外星人宽度的两倍* 
+
+```py
+available_space_x = ai_settings.screen_width - (2 * alien_width)
+```
+
+我们还需要在外星人之间留出一定的空间，即外星人宽度。
+
+因此，显示一个外星人所需的水平空间为外星人宽度的两倍。一个宽度用于放置外星人，另一个宽度为外星人右边的空白区域。
+
+为确定一行可容纳多少个外星人，我们将可用空间除以外星人宽度的两倍
+
+```py
+number_aliens_x = available_space_x / (2 * alien_width)
+```
+
+#### 创建多行外星人
+
+为创建一行外星人，首先在 alien_invasion.py 中创建一个名为 `aliens` 的空编组，用于存储全部外星人，再调用 game_functions.py 中创建外星人群的函数
+
+```py
+> cat alien_invasion.py
+--snip--
+    #创建一艘飞船,一个用于存储子弹的编组 和一个外星人编组
+    ship = Ship(ai_settings,screen)
+    bullets = Group()  
+    aliens = Group() #-------------新增
+    # 创建外星人群
+    gf.create_fleet(ai_settings,screen,aliens) #-------------新增
+
+    #开始游戏的主循环
+    while True:
+--snip--
+        gf.update_screen(ai_settings,screen,ship,aliens,bullets) #-------------新增函数参数 aliens
+--snip--
+```
+
+由于我们不再 alien_invasion.py 中直接创建外星人，因此无需在这个文件中导入 Alien 类
+
+修改对 `update_screen()` 的调用那个，让它能够访问外星人编组
+
+```py
+> cat game_functions.py
+--snip--
+def update_screen(ai_settings,screen,ship,aliens,bullets): #---------------新增函数参数 aliens
+    """更新屏幕的图像，并切换到新屏幕"""
+--snip--
+    ship.blitme()
+    # 显示外星人
+    aliens.draw(screen) #---------------新增
+--snip--
+```
+
+对编组调用 `draw()` 时，pygame 自动绘制编组的每个元素，绘制位置由元素的属性 `rect` 决定。
+
+在啫喱，`aliens.draw(screen)` 在屏幕上绘制编组中的每个外星人
+
+#### 创建外星人群
+
+现在可以创建外星人群，下面是新函数 `create_fleet()`，我们将其放在 game_functions.py 的末尾，还需要导入 Alien 类
+
+```py
+> tail -16 game_functions.py
+--snip--
+def create_fleet(ai_settings,screen,aliens):
+    """创建外星人群"""
+    # 创建一个外星人，并计算一行可容纳多少外星人
+    # 外星人间距为外星人宽度
+    alien = Alien(ai_settings,screen)
+    alien_width = alien.rect.width
+    available_space_x = ai_settings.screen_width - 2 * alien_width
+    number_aliens_x = int(available_space_x / (2 * alien_width))
+
+    # 创建第一行外星人
+    for alien_number in range(number_aliens_x):
+        # 创建一个外星人并将其加入当前行
+        alien = Alien(ai_settings,screen)
+        alien.x = alien_width + 2 * alien_width * alien_number
+        alien.rect.x = alien.x
+        aliens.add(alien)
+```
+
+相比于前面的介绍，这里唯一不同的是使用了 int() 来确保计算得到的外星人数量为整数
+
+![Aliens](../images/et/aliens_group.png) 
+
+这行外星人在屏幕偏左了，这实际上是有好处的，因为我们将让外星人群右移，触及屏幕边缘后稍微向下移，然后往左移，依次类推
+
+#### 重构 create_fleet()
+
+倘若我们创建了外星人群，也许应该让 create_fleet() 保持原样，但鉴于创建外星人的工作还未完成，我们先清理下这个函数
+
+```py
+> tail -23 game_functions.py
+def get_number_aliens_x(ai_settings,alien_width):
+    """计算每行可容纳多少个外星人"""
+    available_space_x = ai_settings.screen_width - 2 * alien_width
+    number_aliens_x = int(available_space_x / (2 * alien_width))
+    return number_aliens_x
+
+def create_alien(ai_settings,screen,aliens,alien_number):
+    """创建一个外星人并将其放在当前行"""
+    alien = Alien(ai_settings,screen)
+    alien_width = alien.rect.width
+    alien.x = alien_width + 2 * alien_width * alien_number
+    alien.rect.x = alien.x
+    aliens.add(alien)
+
+def create_fleet(ai_settings,screen,aliens):
+    """创建外星人群"""
+    # 创建一个外星人，并计算一行可容纳多少外星人
+    alien = Alien(ai_settings,screen)
+    number_aliens_x = get_number_aliens_x(ai_settings,alien.rect.width)
+    # 创建第一行外星人
+    for alien_number in range(number_aliens_x):
+        # 创建一个外星人并将其加入当前行
+        create_alien(ai_settings,screen,aliens,alien_number)
+```
+
+#### 添加行
+
+要创建外星人群，需要计算屏幕可容纳多少行，并对创建一行外星人的循环重复相应的次数。
+
+为计算可容纳的行数，我们这样计算可用垂直空间：*将屏幕高度减去第一行外星人的上边距(外星人高度)、飞船的高度以及最初外星人群与飞船的距离(外星人高度的两倍)* 
+
+```py
+available_space_y = ai_settings.screen_height - 3 * alien_height - ship_height
+```
+
+这样在飞船上方留出一定的空白区域，给玩家留出射杀外星人的时间
+
+每行下方都要留出一定的空白区域，并将其设置为外星人的高度。为计算可容纳的行数，我们将可用垂直空间除以外星人高度的两倍
+
+```py
+number_rows = available_space_y / ( 2 * alien_height )
+```
+
+知道可容纳多少行后，便可重复执行创建一行外星人的代码
+
+```py
+> tail -28 game_functions.py
+def get_number_rows(ai_settings,ship_height,alien_height): #-------新增
+    """计算屏幕可容纳多少行外星人"""
+    available_space_y = (ai_settings.screen_height -
+                        (3 * alien_height) - ship_height)
+    number_rows = int(available_space_y / ( 2 * alien_height ))
+    return number_rows
+
+def create_alien(ai_settings,screen,aliens,alien_number,row_number):
+    """创建一个外星人并将其放在当前行"""
+    alien = Alien(ai_settings,screen)
+    alien_width = alien.rect.width
+    alien.x = alien_width + 2 * alien_width * alien_number
+    alien.rect.x = alien.x
+    alien.rect.y = alien.rect.height + 2 * alien.rect.height * row_number #-------新增
+    aliens.add(alien)
+
+def create_fleet(ai_settings,screen,ship,aliens): #-------新增
+    """创建外星人群"""
+    # 创建一个外星人，并计算一行可容纳多少外星人
+    alien = Alien(ai_settings,screen)
+    number_aliens_x = get_number_aliens_x(ai_settings,alien.rect.width)
+    number_rows = get_number_rows(ai_settings,ship.rect.height, #-------新增
+                                  alien.rect.height)
+    # 创建第一行外星人
+    for row_number in range(number_rows): #-------新增
+        for alien_number in range(number_aliens_x):
+            create_alien(ai_settings,screen,aliens,alien_number, #-------新增
+                         row_number)
+```
+在 create_fleet 的定义中，还新增了一个用于存储 ship 对象的型参，因此在 alien_invasion.py 中调用 create_fleet 时，需要传递实参 ship
+
+```py
+> cat alien_invasion.py| grep fleet
+    gf.create_fleet(ai_settings,screen,ship,aliens) #---------传递了实参 ship
+```
+
+现在运行这个游戏
+
+![Aliens](../images/et/aliens.png) 
+
+### 让外星人群移动
+
+现在让外星人群在屏幕上向右移动，撞到屏幕边缘后下移一定距离，再沿反方向移动，直到所有外星人都被消灭
+
+#### 向右移动外星人
+
+为移动外星人，我们将使用 alien.py 中的方法 update()，且对外星人群中的每个外星人都调用它。首先，添加一个控制外星人速度的设置
+
+```py
+> tail -2 settings.py
+        # 外星人设置
+        self.alien_speed_factor = 1
+```
+
+然后，使用这个设置来实现 `update()`
+
+```py
+> tail -4 alien.py
+    def update(self):
+        """向右移动外星人"""
+        self.x += self.ai_settings.alien_speed_factor
+        self.rect.x = self.x
+```
+
+每次更新外星人位置时，都将他向右移动，移动量为 `alien_speed_factor` 的值。
+
+在 while 循环中已调用了更新子弹和飞船的方法，但现在还需要更新每个外星人的位置
+
+```py
+> tail -5 alien_invasion.py
+        gf.check_events(ai_settings,screen,ship,bullets)
+        gf.update_bullets(bullets)
+        gf.update_aliens(aliens) #---------新增
+        gf.update_screen(ai_settings,screen,ship,aliens,bullets)
+run_game()
+```
+
+在更新子弹后再更新外星人的位置，因为稍后要检查是否有子弹撞到了外星人
+
+最后，在 game_functions.py 末尾添加了新函数 `update_aliens()`
+
+```py
+> tail -5 game_functions.py
+def update_aliens(aliens):
+    """更新外星人群中所有外星人的位置"""
+    aliens.update()
+```
+
+现在，运行这个游戏，会看到外星人群向右移动，并逐渐在屏幕右边消失
+
+#### 创建表示外星人移动方向的设置
+
+现在创建让外星人撞到屏幕右边缘后向下移动、再向左移动的设置。
+
+```py
+> tail -5 settings.py
+        # 外星人设置
+        self.alien_speed_factor = 1
+        self.fleet_drop_speed = 10
+        # fleet_direction 为 1 表示右移，为 -1 表示左移
+        self.fleet_direction = 1
+```
+
+设置 `fleet_drop_speed` 指定了有外星人撞到屏幕边缘时，外星人群向下移动的速度
+
+要实现 `fleet_direction` 设置，可以将其设置为文本值，如 *left* 或 *right* ，但这样就必须编写 if-elif 来检查外星人群的移动方向。鉴于只有两个可能的方向，我们使用 1 和 -1 来表示他们，并在外星人群改变方向时在这两个值之间切换 
+
+#### 检查外星人是否撞到了屏幕边缘
+
+现在需要编写一个方法来检查是否有外星人撞到了屏幕边缘，还需修改 `update()`，以让每个外星人都沿正确的方向移动
+
+```py
+> tail -13 alien.py
+    def check_edges(self):  #---------新增
+        """如果外星人位于屏幕边缘，就返回True"""
+        screen_rect = self.screen.get_rect()
+        if self.rect.right >= screen_rect.right:
+            return True
+        elif self.rect.left <= 0:
+            return True
+
+    def update(self):
+        """向右移动外星人"""
+        self.x += (self.ai_settings.alien_speed_factor * #---------新增
+                    self.ai_settings.fleet_direction)
+        self.rect.x = self.x
+```
+
+我们客队任何外星人调用新方法 `check_events()`，看他是否位于屏幕做边缘或右边缘
+
+修改方法`update()`，将移动量设置为外星人速度和`fleet_direction`的乘积，让外星人向左或向右移动。
+
+#### 向下移动外星人群并改变移动方向
+
+有外星人到达屏幕边缘时，需要将整群外星人下一，并改变它们的移动方向。我们需要修改`game_functions.py`，因为我们要在这里检查是否有外星人到达了左边缘或右边缘
+
+```py
+> tail -20 game_functions.py
+def check_fleet_edges(ai_settings,aliens):
+    """有外星人到达边缘时采取相应的措施"""
+    for alien in aliens.sprites():
+        if alien.check_edges():
+            change_fleet_direction(ai_settings,aliens)
+            break
+
+def change_fleet_direction(ai_settings,aliens):
+    """将整群外星人下移，并改变它们的方向"""
+    for alien in aliens.sprites():
+        alien.rect.y += ai_settings.fleet_drop_speed
+    ai_settings.fleet_direction *= -1
+
+def update_aliens(ai_settings,aliens):
+    """
+    检查是否有外星人位于屏幕边缘，并更新整群外星人的位置
+    """
+    check_fleet_edges(ai_settings,aliens)
+    aliens.update()
+```
+
+在 `check_fleet_edges` 中，我们遍历外星人群，并对其中每个外星人调用`check_edges()`。如果`check_edges()`返回True,我们就知道相应的外星人位于屏幕边缘，需要改变外星人群的方向，因此我们调用`change_fleet_direction()`并退出循环
+
+我们修改了函数 `update_aliens()`，在其中通过调用 `check_fleet_edges()`来确定是否有外星人位于屏幕边缘。现在，函数`update_aliens()`包含型参 ai_settings，因此我们调用它时制定了与 ai_settings 对应的实参
+
+```py
+> tail -3 alien_invasion.py
+        gf.update_aliens(ai_settings,aliens)
+        gf.update_screen(ai_settings,screen,ship,aliens,bullets)
+run_game()
+```
+
+现在运行这个游戏，外星人群会在屏幕上来回移动，并在抵达屏幕边缘后向下移动。
+
+![mov](../images/et/aliens_mov.png) 
+
+### 射杀外星人
+
+目前子弹击中外星人时，会穿过外星人，应为我们还没有做碰撞检测。
+
+在游戏中，`碰撞指的是游戏元素重叠在一起。`要让子弹能击落外星人，我们使用 `sprite.groupcollide()` 检测两个编组的成员之间的碰撞
+
+#### 检测子弹与外星人的碰撞
+
+子弹击中外星人时，我们需要马上知道，以便碰撞发生后让外星人立即消失。为此，我们将在更新子弹的位置后立即检测碰撞
+
+方法`sprite.groupcollide()`将每颗子弹的 rect 同每个外星人的 rect 进行比较，并返回一个字典，其中包含发生了碰撞的子弹和外星人
+
+在这个字典中，每个键都是一颗子弹，而相应的值都是被击中的外星人
+
+在函数 `update_bullets()` 中，用下面的代码来检测碰撞
+
+```py
+> cat game_functions.py
+--snip--
+def update_bullets(aliens,bullets): #-----------新增
+    """更新子弹的位置，并删除已消失的子弹"""
+--snip--
+    # 删除已消失的子弹
+    for bullet in bullets.copy():
+        if bullet.rect.bottom <= 0:
+            bullets.remove(bullet)
+
+    # 检查是否有子弹击中了外星人
+    # 如果是，就删除相应的子弹和外星人
+    collisions = pygame.sprite.groupcollide(bullets,aliens,True,True) #-----------新增
+--snip--
+```
+
+新增的代码能遍历编组 bullets 中的每颗子弹，再遍历编组 aliens 中的每个外星人。
+
+每当有子弹和外星人的 rect 重叠时，groupcollide() 就在它返回的字典中添加一个键值对。两个实参 True 告诉 pygame 删除发生碰撞的子弹和外星人。
+
+现在更新主函数
+
+```py
+> tail -7 alien_invasion.py
+    #开始游戏的主循环
+    while True:
+        gf.check_events(ai_settings,screen,ship,bullets)
+        ship.update()
+        gf.update_bullets(aliens,bullets) #---------新增参数aliens
+        gf.update_aliens(ai_settings,aliens)
+        gf.update_screen(ai_settings,screen,ship,aliens,bullets)
+run_game()
+```
+
+现在已经可以射杀外星人了
+
+![kill](../images/et/kill_alien.png) 
+
+#### 为测试创建大子弹
+
+只需通过运行这个游戏就可以测试其很多功能，但有些功能在正常情况下测试起来比较繁琐。eg：要测试代码能否正确地处理外星人编组为空的情况，需要花很长时间将屏幕上的外星人都击落
+
+测试某些功能时，可以修改游戏的某些设置，一边专注于游戏的特定方面
+
+eg：将 `bullet_width` 设置为 200,看看效果
+
+![bigBullet](../images/et/big_bullet.png) 
+
+#### 生成新的外星人群
+
+这个游戏的一个重要特点就是外星人无穷无尽，一个外星人群被消灭后，又会出现一群外星人
+
+要在外星人群被消灭后又显示一群外星人，首先需要检查编组 aliens 是否为空。如果为空，就调用 `create_fleet()`。我们在 `update_bullets()`中执行这种检查，因为外星人都是在这里被消灭的
+
+```py
+> cat game_functions.py
+--snip--
+def update_bullets(ai_settings,screen,ship,aliens, bullets): #-------新增参数
+    """更新子弹的位置，并删除已消失的子弹"""
+--snip--
+    collisions = pygame.sprite.groupcollide(bullets, aliens, True, True)
+
+    if len(aliens) == 0: #-------新增
+        # 删除现有的子弹并新建一群外星人
+        bullets.empty()
+        create_fleet(ai_settings,screen,ship,aliens)
+--snip--
+```
+
+现在更新 `alien_invasion.py` 中对 `update_bullets()` 的调用
+
+```py
+> tail -8 alien_invasion.py
+        gf.check_events(ai_settings, screen, ship, bullets)
+        ship.update()
+        gf.update_bullets(aliens, screen,ship,aliens,bullets) #--------新增参数
+        gf.update_aliens(ai_settings, aliens)
+        gf.update_screen(ai_settings, screen, ship, aliens, bullets)
+run_game()
+```
+
+现在，当前外星人群被消灭干净后，将立刻出现一个新的外星人群
+
+#### 提高子弹的速度
+
+如果现在尝试在这个游戏中射杀外星人，可能发现子弹的速度比以前满，这是因为每次循环中， pygame 要做的工作更多了。
+
+为提高子弹的速度，可调整 settings.py 中 `bullet_speed_factor` 的值
+
+```py
+> cat settings.py| grep bullet_sp
+        self.bullet_speed_factor = 3
+```
+
+#### 重构 update_bullets()
+
+现在重构 `update_bullets()`，使其不再完成那么多任务。我们把处理子弹和外星人碰撞的代码移动到一个独立的函数中
+
+```py
+> cat game_functions.py
+--snip--
+def update_bullets(ai_settings,screen,ship,aliens, bullets):
+    """更新子弹的位置，并删除已消失的子弹"""
+--snip--
+    for bullet in bullets.copy():
+        if bullet.rect.bottom <= 0:
+            bullets.remove(bullet)
+    # 检查是否有子弹击中了外星人
+    # 如果是，就删除相应的子弹和外星人
+    check_bullet_alien_collisions(ai_settings,screen,ship,aliens,bullets)
+
+def check_bullet_alien_collisions(ai_settings,screen,ship,aliens,bullets):
+    """响应子弹和外星人的碰撞"""
+    # 删除发生碰撞的子弹和外星人
+    collisions = pygame.sprite.groupcollide(bullets, aliens, True, True)
+    if len(aliens) == 0:
+        # 删除现有的子弹并新建一群外星人
+        bullets.empty()
+        create_fleet(ai_settings,screen,ship,aliens)
+--snip--
+```
+
+### 结束游戏
+
+如果玩家根本不会输，那么游戏就没有挑战性。如果玩家没能在时间内将外星人群消灭，且有外星人撞到了飞船，飞船将被摧毁。
+
+与此同时，我们还限制了可供玩家使用的飞船数，而有外星人抵达屏幕底端时，飞船也将被摧毁。玩家用光了飞船后，游戏便结束
+
+#### 检测外星人和飞船碰撞
+
+首先检查外星人和飞船之间的碰撞，以便外星人撞上飞船时我们能做出合适的响应。我们在更新每个外星人的位置后立即检测外星人和飞船之间的碰撞
+
+```py
+> tail -11 game_functions.py
+def update_aliens(ai_settings, aliens):
+    """
+    检查是否有外星人位于屏幕边缘，并更新整群外星人的位置
+    """
+    check_fleet_edges(ai_settings, aliens)
+    aliens.update()
+
+    # 检测外星人和飞船之间的碰撞
+    #
+    if pygame.sprite.spritecollideany(ship,aliens):
+        print("Ship hit!!!")
+```
+
+方法 `spritecollideany()` 接受两个实参，一个精灵和一个编组。它检查编组是否有成员与精灵发生了碰撞，并在找到与精灵发生了碰撞的成员后就停止遍历编组。
+
+如果没有发生碰撞，`spritecollideany()`将返回 None,
+
+现在，我们需要将 ship 传递给 update_aliens()
+
+```py
+> tail -8 alien_invasion.py
+    while True:
+        gf.check_events(ai_settings, screen, ship, bullets)
+        ship.update()
+        gf.update_bullets(ai_settings, screen,ship,aliens,bullets)
+        gf.update_aliens(ai_settings, ship, aliens) #-------更新参数 ship
+        gf.update_screen(ai_settings, screen, ship, aliens, bullets)
+
+run_game()
+```
+
+现在运行这个游戏，每当有外星人撞到飞船时，终端都会显示 "Ship hit!!!"
+
+![ship_hit](../images/et/ship_hit.png) 
+
+#### 响应外星人和飞船碰撞
+
+现在需要确定外星人与飞船发生碰撞时，该做什么。
+
+我们不销毁 ship 实例并创建爱你一个新的 ship 实例，而是通过跟踪游戏的统计信息来记录飞船被撞了读少次(跟踪统计信息有助于计分)
+
+现在编写一个用于跟踪游戏统计信息的新类`GameStats`，并将其保存为文件爱你 game_stats.py
+
+```py
+> cat game_stats.py
+class GameStats():
+    """跟踪游戏的统计信息"""
+    def __init__(self, ai_settings):
+        """初始化统计信息"""
+        self.ai_settings = ai_settings
+        self.reset_stats()
+
+    def reset_stats(self):
+        """初始化在游戏运行期间可能发生变化的统计信息"""
+        self.ships_left = self.ai_settings.ship_limit
+```
+
+在这个游戏运行期间，我们只创建一个`GameStats`实例，但每当玩家开始新游戏时，需要重置一些统计信息。
+
+为此，我们在 reset_stats() 中初始化大部分统计信息
+
+当只有一项统计信息 `ships_left` ，其值在游戏运行期间将不断变化。一开始玩家拥有的飞船数存储在 settings.py 的 ship_limit 中
+
+```sh
+> cat settings.py | grep limit
+        self.ship_limit = 3
+```
+
+我们还需要修改 alien_invasion.py，以创建一个 GameStats 实例
+
+```py
+> cat alien_invasion.py
+--snip--
+    # 创建一个用于存储游戏统计信息的实例
+    stats = GameStats(ai_settings) #------------新增
+
+    # 开始游戏的主循环
+    while True:
+        gf.check_events(ai_settings, screen, ship, bullets)
+        ship.update()
+        gf.update_bullets(ai_settings, screen,ship,aliens,bullets)
+        gf.update_aliens(ai_settings,stats,screen, ship, aliens,bullets) #------------新增参数
+--snip--
+```
+
+有外星人撞到飞船时，我们就爱那个余下的飞船数 -1,创建一群新的外星人，并将飞船重新放置到屏幕底部中央。
+
+下面将实现这些功能的大部分代码放到函数 `ship_hit()` 中
+
+```py
+> tail -27 game_functions.py
+def ship_hit(ai_settings,stats,screen,ship,aliens,bullets): #---------新增
+    """响应被外星人撞到的飞船"""
+    # 将 ships_left -1
+    stats.ship_left -= 1
+
+    # 清空外星人列表和子弹列表
+    aliens.empty()
+    bullets.empty()
+
+    # 创建一群新的外星人，并将飞船放到屏幕底部中央
+    create_fleet(ai_settings,screen,ship,aliens)
+    ship,center_ship()
+
+    # 暂停
+    sleep(0.5)
+
+def update_aliens(ai_settings,stats,screen,ship,aliens, bullets):
+    """
+    检查是否有外星人位于屏幕边缘，并更新整群外星人的位置
+    """
+    check_fleet_edges(ai_settings, aliens)
+    aliens.update()
+
+    # 检测外星人和飞船之间的碰撞
+    #
+    if pygame.sprite.spritecollideany(ship,aliens):
+        ship_hit(ai_settings,stats,screen,ship,aliens,bullets) #---------新增
+```
+
+下面是新方法 `center_ship()`，将其添加到 ship.py 的末尾
+
+```py
+> tail -4 ship.py
+    def center_ship(self):
+        """让飞船在屏幕上居中"""
+        self.center = self.screen_rect.centerx
+```
+
+现在运行游戏，射杀几个外星人，并让一个外星人撞到飞船。游戏暂停后，将出现一群新的外星人，而飞船将在屏幕底部居中
+
+#### 有外星人达到屏幕底部
+
+如果有外星人到达屏幕底部，我们将像有外星人撞到飞船那样做出响应。这个新函数名为 `update_aliens()`
+
