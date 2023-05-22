@@ -1,3 +1,4 @@
 - [首页](../README.md)
 - Django 基础
 - [base](/Django/basic.md)
+- [Django入门](/Django/base.md) 

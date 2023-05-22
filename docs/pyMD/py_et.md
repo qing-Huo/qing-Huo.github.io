@@ -4,6 +4,26 @@
 
 `pygame`可用于管理图形、动画乃至声音，可让开发者轻松开发复杂的游戏。通过使用 pygame 来处理在屏幕上绘制图像等任务，不用考虑容多繁琐而艰难的编码工作，而是将重点放在程序的高级逻辑上
 
+项目结构如下
+
+```py
+.
+├── alien_invasion.py #主程序
+├── alien.py     # 外星人相关
+├── bullet.py     # 子弹相关
+├── button.py     # 按钮相关
+├── game_functions.py     # 处理相关
+├── game_stats.py     # 计分相关
+├── images     # 图像
+│   ├── alien.bmp
+│   └── ship.bmp
+├── scoreboard.py     # 计分类
+├── settings.py     # 初始化设置
+└── ship.py     # 飞船相关
+
+2 directories, 11 files
+```
+
 ## 飞船篇
 
 ### 创建游戏窗口
@@ -1609,4 +1629,647 @@ def update_aliens(ai_settings,stats,screen,ship,aliens, bullets):
 #### 有外星人达到屏幕底部
 
 如果有外星人到达屏幕底部，我们将像有外星人撞到飞船那样做出响应。这个新函数名为 `update_aliens()`
+
+```py
+> tail -22 game_functions.py
+def check_aliens_bottom(ai_settings,stats,screen,ship,aliens,bullets): #-------新增
+    """检查是否有外星人到达了屏幕底部"""
+    screen_rect = screen.get_rect()
+    for alien in aliens.sprites():
+        if alien.rect.bottom >= screen_rect.bottom:
+            # 像飞船被撞到一样进行处理
+            ship_hit(ai_settings,stats,screen,ship,aliens,bullets)
+            break
+
+def update_aliens(ai_settings,stats,screen,ship,aliens, bullets):
+    """
+    检查是否有外星人位于屏幕边缘，并更新整群外星人的位置
+    """
+    check_fleet_edges(ai_settings, aliens)
+    aliens.update()
+
+    # 检测外星人和飞船之间的碰撞
+    if pygame.sprite.spritecollideany(ship,aliens):
+        ship_hit(ai_settings,stats,screen,ship,aliens,bullets)
+
+    # 检查是否有外星人到达屏幕底部
+    check_aliens_bottom(ai_settings,stats,screen,ship,aliens,bullets) #-------新增
+```
+
+`check_aliens_bottom()` 检查是否有外星人达到了屏幕底端。到达屏幕底端都，外星人的属性 `rect.bottom` 的值大于或等于屏幕的属性 `rect.bottom` 的值。
+
+现在，每当有外星人撞到飞船或抵达屏幕底端后，都将出现一群新的外星人
+
+#### 游戏结束
+
+现在这个游戏只是表面看起来完整了，但是它永远都不会结束，只是 `ships_left` 不断变成更小的负数。
+
+现在在 `GameStats` 中添加一个作为标志的属性 `game_active`，以便在玩家的飞船用完后结束游戏
+
+```py
+> cat game_stats.py
+class GameStats():
+    """跟踪游戏的统计信息"""
+    def __init__(self, ai_settings):
+        """初始化统计信息"""
+        self.ai_settings = ai_settings
+        self.reset_stats()
+        # 游戏刚启动时处于活动状态
+        self.game_active = True #-----------新增
+
+    def reset_stats(self):
+        """初始化在游戏运行期间可能发生变化的统计信息"""
+        self.ships_left = self.ai_settings.ship_limit
+```
+
+现在在 `ship_hit()` 中添加代码，在玩家的飞船都用完后将 `game_active` 设置为 False
+
+```py
+> cat game_functions.py
+--snip--
+def ship_hit(ai_settings,stats,screen,ship,aliens,bullets):
+    """响应被外星人撞到的飞船"""
+    # 将 ships_left -1
+    if stats.ships_left > 0: #--------新增判断
+        stats.ships_left -= 1
+        # 清空外星人列表和子弹列表
+        aliens.empty()
+        bullets.empty()
+        # 创建一群新的外星人，并将飞船放到屏幕底部中央
+        create_fleet(ai_settings,screen,ship,aliens)
+        ship.center_ship()
+        # 暂停
+        sleep(0.5)
+    else: #--------新增判断
+        stats.game_active = False #--------新增
+--snip--
+```
+
+`ship_hit()` 的大部分代码都没变。我们将原来的代码都移动到 if 语句中，这条 if 语句会检查玩家是否至少还有一艘飞船。
+
+### 确定应运行游戏的哪些部分
+
+在 `alien_invasion.py` 中，我们需要确定游戏的哪些部分在任何情况下都应该运行，哪些部分仅在游戏处于活动状态时才运行
+
+```py
+> tail -12 alien_invasion.py
+    # 开始游戏的主循环
+    while True:
+        gf.check_events(ai_settings, screen, ship, bullets)
+
+        if stats.game_active: #----------新增判断
+            ship.update()
+            gf.update_bullets(ai_settings, screen,ship,aliens,bullets)
+            gf.update_aliens(ai_settings,stats,screen, ship, aliens,bullets)
+
+        gf.update_screen(ai_settings, screen, ship, aliens, bullets)
+
+run_game()
+```
+
+在主循环中，任何情况下都要调用 `check_events()`，即便游戏处于非活动状态时亦是如此。
+
+现在，运行这个游戏，它将在飞船用完后停止不动
+
+## 记分系统
+
+在本章中，我们将添加一个 Play 按钮，用于根据需要启动游戏以及在游戏结束后重启游戏。我们还将修改这个游戏，使其在玩家的等级提高时加快节奏，并实现一个记分系统
+
+### 添加 Play 按钮
+
+现在添加一个 Play 按钮，它在游戏开始前出现，并在游戏结束后再次出现，让玩家能够开始新游戏
+
+当前，这个游戏在玩家运行 `alien_invasion.py` 后就开始了。下面让游戏一开始处于非活动状态，并提示玩家单击 Play 按钮来开始游戏。为此，在 `game_stats.py` 中添加代码如下
+
+```py
+> cat game_stats.py
+class GameStats():
+    """跟踪游戏的统计信息"""
+    def __init__(self, ai_settings):
+        """初始化统计信息"""
+        self.ai_settings = ai_settings
+        self.reset_stats()
+        # 游戏刚启动时处于活动状态
+        self.game_active = False #---------修改
+--snip--
+```
+
+现在游戏一开始处于非活动状态，等我们创建 Play 按钮后，玩家才能开始玩游戏
+
+#### 创建 Button 类
+
+由于 pygame 没有内置创建按钮的方法，我们创建一个 Button 类，用于创建带标签的实心矩形。下面是 Button 类的第一部分
+
+```py
+> cat button.py
+import pygame.font
+
+class Button():
+    def __init__(self, ai_settings, screen, msg):
+        """初始化按钮的属性"""
+        self.screen = screen
+        self.screen_rect = screen.get_rect()
+
+        # 设置按钮的尺寸和其他属性
+        self.width, self,height = 200,50
+        self,button_color = (0,255,0)
+        self.text_color = (255,255,255)
+        self.font = pygame.font.SysFont(None,48)
+
+        # 创建按钮的 rect 对象，并居中
+        self.rect = pygame.Rect(0,0,self.width,self,height)
+        self.rect.center = self.screen_rect.center
+
+        # 按钮的标签只需创建一次
+        self.prep_msg(msg)
+```
+
+`pygame.font` 能让 pygame 将文本渲染到屏幕上。
+
+pygame 通过将你要显示的字符串渲染为图像来处理文本。我们调用 `prep_msg()` 来处理这样的渲染，代码如下
+
+```py
+> cat button.py
+import pygame.font
+
+class Button():
+
+    def __init__(self, ai_settings, screen, msg):
+        """初始化按钮的属性"""
+--snip--
+
+    def prep_msg(self, msg): #-------------新增
+        """将 msg 渲染为图像，并在按钮上居中"""
+        self.msg_image = self.font.render(msg,True,self.text_color,
+                                          self.button_color)
+        self.msg_image_rect = self.msg_image.get_rect()
+        self.msg_image_rect.center = self.rect.center
+```
+
+`prep_msg()`接受self和要渲染为图像的文本(msg)，调用 `font.render()`将存储在 msg 中的文本转换为图像，然后将该图像存储在 msg_image 中。
+
+`font.render()` 还接收一个布尔实参，该实参指定开启或关闭反锯齿功能。余下的两个实参分别是文本颜色和背景色
+
+最后，我们创建方法 `draw_button()`，通过它可将这个按钮显示到屏幕上
+
+```py
+> cat button.py
+import pygame.font
+
+class Button():
+
+    def __init__(self, ai_settings, screen, msg):
+        """初始化按钮的属性"""
+--snip--
+
+    def draw_button(self): #-----------新增
+        # 绘制一个用颜色填充的按钮，再绘制文本
+        self.screen.fill(self.button_color,self.rect)
+        self.screen.blit(self.msg_image,self.msg_image_rect)
+```
+
+我们调用 `screen.fill()` 来绘制表示按钮的举行，再调用 `screen_blit()`，并向他传递一幅图像和与该图像相关联的 rect 对象，从而在屏幕上绘制文本图像。至此，Button 类便创建好了
+
+#### 在屏幕上绘制按钮
+
+我们使用 Button 类来创建一个 Play 按钮。鉴于只需要一个  Play 按钮，我们直接在 `alien_invasion.py` 中创建它
+
+```py
+> cat alien_invasion.py
+--snip--
+    pygame.display.set_caption("Alien Invasion")
+
+    # 创建 Play 按钮
+    play_button = Button(ai_settings,screen,"Play") #---------新增
+--snip--
+
+    # 开始游戏的主循环
+    while True:
+        gf.update_screen(ai_settings, screen, stats,ship, aliens, bullets, #---------新增
+                         play_button)
+```
+
+现在，修改 `update_screen()`，以便在游戏时处于非活动状态时显示按钮 Play
+
+```py
+> cat game_functions.py
+--snip--
+def update_screen(ai_settings, screen,stats, ship, aliens, bullets, #----------新增参数
+                  play_button):
+    """更新屏幕的图像，并切换到新屏幕"""
+--snip--
+    # 如果游戏处于非活动的状态，就绘制 Play 按钮
+    if not stats.game_active: #-----------新增
+        play_button.draw_button()
+
+    # 让最近重绘的屏幕可见
+    pygame.display.flip()
+--snip--
+```
+
+为了让 Play 按钮位于其他屏幕元素的上层，我们在绘制其他所有游戏元素后再绘制这个按钮，然后切换到新屏幕。现在运行游戏
+
+![button](../images/et/button.png) 
+
+#### 开始游戏
+
+为了在玩家点击 Play 按钮后开始游戏，须在 game_functions.py 中添加如下代码，以监视与这个按钮相关的鼠标事件
+
+```py
+> cat game_functions.py
+--snip--
+def check_events(ai_settings, screen,stats,play_button, ship, bullets): #------新增参数
+    """响应按键和鼠标事件"""
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+--snip--
+        elif event.type == pygame.MOUSEBUTTONDOWN: #------新增参数
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            check_play_button(stats,play_button,mouse_x,mouse_y)
+
+def check_play_button(stats,play_button,mouse_x,mouse_y): #------新增参数
+    """在玩家单击 Play 按钮后开始新游戏"""
+    if play_button.rect.collidepoint(mouse_x,mouse_y):
+        stats.game_active = True
+--snip--
+```
+
+在 alien_invasion.py 中调用 check_events()，需要传递另外两个实参--stats 和 play_button
+
+```py
+> cat alien_invasion.py
+--snip--
+    # 开始游戏的主循环
+    while True:
+        gf.check_events(ai_settings, screen,stats,play_button, ship,
+                        bullets)
+--snip--
+```
+
+现在，应该可以正常开始游戏了。游戏结束后，`game_active` 应为 False,并重新显示 Play 按钮
+
+#### 重置游戏
+
+前面那些的代码只处理了玩家第一次单击 Play 按钮的情况，而没有处理游戏结束的情况，因为没有重置导致游戏结束的条件
+
+为在玩家每次单击 Play  按钮后都重置游戏，需要重置统计信息，删除现有的外星人和子弹、创建一群新的外星人，并让飞船居中
+
+```py
+> cat game_functions.py
+--snip--
+def check_play_button(ai_settings,screen,stats,play_button,ship,aliens, #-------------新增参数
+                      bullets,mouse_x,mouse_y):
+    """在玩家单击 Play 按钮后开始新游戏"""
+    if play_button.rect.collidepoint(mouse_x,mouse_y):
+        # 重置游戏统计信息
+        stats.reset_stats() #-------------新增
+        stats.game_active = True
+
+        # 清空外星人列表和子弹列表
+        aliens.empty() #-------------新增
+        bullets.empty() #-------------新增
+
+        # 创建一群心得外星人，并让飞船居中
+        create_fleet(ai_settings,screen,ship,aliens) #-------------新增
+        ship.center_ship() #-------------新增
+--snip--
+```
+
+check_events() 的定义需要修改，调用 `check_play_button()` 的代码亦如此
+
+```py
+> cat game_functions.py
+--snip--
+def check_events(ai_settings, screen,stats,play_button, ship,aliens,
+                 bullets):
+    """响应按键和鼠标事件"""
+    for event in pygame.event.get():
+--snip--
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            check_play_button(ai_settings,screen,stats,play_button,ship,aliens,
+                              bullets,mouse_x,mouse_y)
+--snip--
+```
+
+现在修改 alien_invasion.py 中调用 check_events() 的带澳门
+
+```py
+> cat alien_invasion.py
+--snip--
+    # 开始游戏的主循环
+    while True:
+        gf.check_events(ai_settings, screen,stats,play_button, ship,
+                        aliens,bullets) #-------新增参数
+--snip--
+```
+
+现在，每当玩家点击 Play 按钮后，这个游戏都将正确重置
+
+#### 将 Play 切换到非活动状态
+
+当前，Play 按钮存在一个问题，那就是即便 Play 按钮不可见，玩家单击其原本所在的区域后，游戏依然会做出相应。
+
+为修复这个问题，可让游戏仅在 game_active 为 False 时才开始
+
+```py
+> cat game_functions.py
+--snip--
+def check_play_button(ai_settings,screen,stats,play_button,ship,aliens,
+                      bullets,mouse_x,mouse_y):
+    """在玩家单击 Play 按钮后开始新游戏"""
+    button_clicked = play_button.rect.collidepoint(mouse_x,mouse_y) #--------新增
+    if button_clicked and not stats.game_active: #--------新增
+        # 重置游戏统计信息
+--snip--
+```
+
+#### 隐藏光标
+
+为让玩家能开始游戏，我们要让光标可见，但游戏开始后，光标只会添乱
+
+```py
+> cat game_functions.py
+--snip--
+def check_play_button(ai_settings,screen,stats,play_button,ship,aliens,
+                      bullets,mouse_x,mouse_y):
+    """在玩家单击 Play 按钮后开始新游戏"""
+    button_clicked = play_button.rect.collidepoint(mouse_x,mouse_y)
+    if button_clicked and not stats.game_active:
+        # 隐藏光标
+        pygame.mouse.set_visible(False) #-------------新增
+--snip--
+```
+
+通过向 `set_visible()` 传递 False,让 pygame 在光标位于游戏窗口内时将其隐藏起来
+
+游戏结束后，我们将重新显示光标
+
+```py
+> cat game_functions.py
+--snip--
+def ship_hit(ai_settings,stats,screen,ship,aliens,bullets):
+    """响应被外星人撞到的飞船"""
+--snip--
+    else:
+        stats.game_active = False
+        pygame.mouse.set_visible(True) #-------------新增
+--snip--
+```
+
+在 ship_hit() 中，我们在游戏进入非活动状态后，立即让光标可见。关注这样的细节让游戏显得更专业，也让玩家能够专注于游戏而不是费力搞明白用户界面
+
+### 提高等级
+
+当前，将整群外星人都消灭后，玩家将提高一个等级，但游戏的难度并没有改变。下面增加一点趣味性：每当玩家将屏幕上的外星人都消灭后，加快游戏的节奏，让游戏玩起来更难
+
+#### 修改游戏速度
+
+我们首先重新组织 Settings 类，将游戏设置划分为静态和动态两种。对于随着游戏进行而变化的设置，我们还确保他们在开始新游戏后被重置
+
+```py
+> cat settings.py
+class Settings():
+    """存储《外星人入侵》的所有设置的类"""
+
+    def __init__(self):
+        """初始化游戏的静态设置"""
+        # 屏幕设置
+        self.screen_width = 1200
+        self.screen_height = 800
+        self.bg_color = (230, 230, 230)
+        # 飞船的位置
+        self.ship_limit = 3
+
+        # 子弹设置
+        self.bullet_width = 200
+        self.bullet_height = 15
+        self.bullet_color = (60, 60, 60)
+        self.bullets_allowed = 3  # 限制子弹数量
+
+        # 外星人设置
+        self.fleet_drop_speed = 10
+
+        # 以什么样的速度加快游戏节奏
+        self.speedup_scale = 1.1
+        self.initialize_dynamic_settings()
+
+    def initialize_dynamic_settings(self):
+        """初始化随游戏进行而变化的设置"""
+        self.ship_speed_factor = 1.5
+        self.bullet_speed_factor = 3
+        self.alien_speed_factor = 1
+
+        # fleet_direction 为 1 表示右移，为 -1 表示左移
+        self.fleet_direction = 1
+```
+
+`initialize_dynamic_settings()` 设置了飞船、子弹和外星人的初始速度。随着游戏的进行，我们将提高这些速度，而每当玩家开始新游戏时，都将重置这些速度
+
+```py
+> tail -5 settings.py
+    def increase_speed(self):
+        """提高速度设置"""
+        self.ship_speed_factor *= self.speedup_scale
+        self.bullet_speed_factor *= self.speedup_scale
+        self.alien_speed_factor *= self.speedup_scale
+```
+
+为提高这些游戏的速度，我们将每个速度设置都乘以 `speedup_scale` 的值
+
+在 `check_bullet_alien_collisions()` 中，我们在整群外形你个人都被消灭后调用`increase_speed()` 来加快游戏的节奏，再创建一群新的外星人
+
+```py
+> cat game_functions.py
+def check_bullet_alien_collisions(ai_settings,screen,ship,aliens,bullets):
+    """响应子弹和外星人的碰撞"""
+    # 删除发生碰撞的子弹和外星人
+    collisions = pygame.sprite.groupcollide(bullets, aliens, True, True)
+    if len(aliens) == 0:
+        # 删除现有的子弹，加快游戏节奏，并创建一群新的外星人
+        bullets.empty()
+        ai_settings.increase_speed() #--------------新增
+        create_fleet(ai_settings,screen,ship,aliens)
+```
+
+#### 重置速度
+
+每当玩家开始新游戏后，我们都需要将发生了变化的设置重置为初始值，否则信息开始时，速度设置将是前一次游戏增加后的值
+
+```py
+> cat game_functions.py
+--snip--
+def check_play_button(ai_settings,screen,stats,play_button,ship,aliens,
+                      bullets,mouse_x,mouse_y):
+    """在玩家单击 Play 按钮后开始新游戏"""
+    button_clicked = play_button.rect.collidepoint(mouse_x,mouse_y)
+    if button_clicked and not stats.game_active:
+        # 重置游戏设置
+        ai_settings.initialize_dynamic_settings() #-----------新增
+        # 隐藏光标
+--snip--
+```
+
+现在，游戏玩起来更有挑战性了
+
+### 积分
+
+现在实现一个积分系统，以实时地跟踪玩家的得分，并显示最高得分、当前等级和余下的飞船数
+
+得分是游戏的一项统计信息，因此我们在 GameStats 中添加一个 `score` 属性
+
+#### 显示得分
+
+为在屏幕上显示得分，我们首先创建爱你一个新类 `Scoreboard`。就当前而言，这个类之显示当前得分，但后面我们也将使用它来显示最高得分、等级和余下的飞船数
+
+```py
+> cat scoreboard.py
+import pygame.font
+
+class Scoreboard():
+    """显示得分信息的类"""
+    def __init__(self, ai_settings, screen, stats):
+        """初始化显示得分涉及的属性"""
+        self.screen = screen
+        self.screen_rect = screen.get_rect()
+        self.ai_settings = ai_settings
+        self.stats = stats
+
+        # 显示得分信息时使用的字体设置
+        self.text_color = (30,30,30)
+        self.font = pygame.font.SysFont(None,50)
+
+        # 准备初始得分图像
+        self.prep_score()
+```
+
+为将要显示的文本转为图像，我们调用了 `prep_score()`，其定义如下
+
+```py
+> cat scoreboard.py
+--snip--
+    def prep_score(self):
+        """将得分转换为一副渲染的图像"""
+        score_str = str(self.stats.score)
+        self.score_image = self.font.render(score_str, True, self.text_color,
+                                            self.ai_settings.bg_color)
+
+        # 将得分放在屏幕右上角
+        self.score_rect = self.score_image.get_rect()
+        self.score_rect.right = self.screen_rect.right -20
+        self.score_rect.top = 20
+```
+
+最后，我们创建 `show_score()`，用于显示渲染好的得分图像
+
+```py
+> cat scoreboard.py
+    def show_score(self):
+        """在屏幕上显示得分"""
+        self.screen.blit(self.score_image,self.score_rect)
+```
+
+这个方法将得分图像显示到屏幕上，并将其放在 `score_rect` 指定的位置
+
+#### 创建记分牌
+
+为显示得分，我们在 alien_invasion.py 中创建一个 Scoreboard 实例
+
+```py
+> cat alien_invasion.py
+--snip--
+    # 创建存储游戏统计信息的实例，并创建记分牌
+    stats = GameStats(ai_settings)
+    sb = Scoreboard(ai_settings,screen,stats) #----------新增
+
+    # 开始游戏的主循环
+    while True:
+--snip--
+        gf.update_screen(ai_settings, screen, stats,sb,ship, aliens, bullets, #--------新增
+                         play_button)
+```
+
+为显示得分，修改`update_screen()`
+
+```py
+> cat game_functions.py
+def update_screen(ai_settings, screen,stats,sb, ship, aliens, bullets,
+                  play_button):
+    """更新屏幕的图像，并切换到新屏幕"""
+--snip--
+    # 显示外星人
+    aliens.draw(screen)
+
+    # 显示得分
+    sb.show_score()
+
+    # 如果游戏处于非活动的状态，就绘制 Play 按钮
+    if not stats.game_active:
+        play_button.draw_button()
+--snip--
+```
+
+现在运行游戏，将在屏幕右上角看到 0
+
+![score_0](../images/et/scoreboard_0.png) 
+
+#### 消灭外星人后更新得分
+
+为了在屏幕上实时地更新得分，每当有外星人被击中时，我们都更新 `stats.score` 的值，再调用 `prep_score()` 更新得分图像。
+
+在此之前，我们需要指定玩家每击落一个外星人都将得到多少个点
+
+```py
+> cat settings.py
+    def initialize_dynamic_settings(self):
+        """初始化随游戏进行而变化的设置"""
+--snip--
+        # 记分
+        self.alien_points = 50
+```
+
+随着游戏的进行，我们将提高每个外星人的点数。为确保每次开始新游戏后这个值都会被重置，我们在`initialize_dynamic_settings()`中设置它
+
+在 `check_bullet_alien_collisions()` 中，每当有外星人被击落后，都更新得分
+
+```py
+> cat game_functions.py
+def check_bullet_alien_collisions(ai_settings,screen,stats,sb,ship,
+                                  aliens,bullets):
+    """响应子弹和外星人的碰撞"""
+    # 删除发生碰撞的子弹和外星人
+    collisions = pygame.sprite.groupcollide(bullets, aliens, True, True)
+
+    if collisions:
+        stats.score += ai_settings.alien_points
+        sb.prep_score()
+--snip--
+```
+修改 `update_bullets()` 中的参数
+
+#### 将消灭的外星人的点数计入得分
+
+当前，我们的代码可能遗漏了一些被消灭的外星人，eg：如果一次循环中有两颗子弹射中了外星人，玩家只能得到一个被消灭的外星人的点数。
+
+为了修复这种问题，我们调整检测子弹和外星人碰撞的方式
+
+#### 提高点数
+
+玩家每提高一个等级，游戏都变得更难，因此处于较高的等级时，外星人的点数应该更高
+
+#### 将得分远征
+
+大多数街机风格的射击游戏都将得分显示为 10 的整数倍，下面让我们的计分系统遵循这个原则。我们还将设置得分的格式，在大数字中添加用逗号表示的千位分隔符
+
+#### 最高得分
+
+每个玩家都向超过游戏的最高得分记录
+
+![test](../images/et/test_game.png) 
+
+#### 显示余下的飞船数
+
+最后，我们显示玩家还剩下多少艘飞船，但使用图像显示而不是数字
+
+![overGame](../images/et/over_game.png) 
 
