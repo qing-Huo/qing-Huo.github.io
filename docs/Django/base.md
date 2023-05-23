@@ -289,5 +289,145 @@ admin.site.register(Topic) #-------新增
 
 向管理网站注册 Topic 后，我们来添加第一个主题。
 
-为此，单击 Topic 进入主题网页，他几乎是空的，这是因为我们还没添加任何主题
+为此，单击 Topic 进入主题网页，他几乎是空的，这是因为我们还没添加任何主题。
+
+为此，单击 Topics 进入主题网页，它几乎是空的，这是因为我们还没有添加任何主题。单击 Add,你将看到一个用于添加新主题的表单。在第一个方框中输入 Chess,再点击 Save,这将返回到主题管理页面，其中包含刚创建的主题
+
+#### 定义模型 Entry
+
+要记录学到的国际象棋和攀岩知识，需要为用户可在学习笔记中添加的条目定义模型。
+
+每个条目都与特定主题相关联，这种关系被称为多对一关系，即多个条目可关联到同一个主题
+
+下面是模型 Entry 的代码
+
+```py
+> cat learning_logs/models.py
+from django.db import models
+# Create your models here.
+class Topic(models.Model):
+    """用户学习的主题"""
+--snip--
+
+class Entry(models.Model):
+    """学到的有关某个主题的具体知识"""
+    topic = models.ForeignKey(Topic)
+    text = models.TextField()
+    date_added = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name_plural = "entries"
+
+    def __str__(self):
+        """返回模型的字符串表示"""
+        return self.text[:50] + '......'
+```
+
+#### 迁移模型 Entry
+
+由于我们添加了一个新模型，需要再次迁移数据库。
+
+> 修改 models.py ，执行命令 `python manage.py makemigrations app_name`，在执行命令 `python manage.py migrate`
+
+现在来迁移数据库并查看输出
+
+```sh
+> python manage.py makemigrations learning_logs # 按书上执行会报错，根据报错信息添加一个参数解决
+Migrations for 'learning_logs':
+  learning_logs/migrations/0002_entry.py
+    - Create model Entry
+> python manage.py migrate
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, learning_logs, sessions
+Running migrations:
+  Applying learning_logs.0002_entry... OK
+```
+
+生成了一个新的迁移文件————`0002_entry.py`，他告诉 Django 如何修改数据库，使其能够存储与模型 Entry 相关的信息。执行命令 migrate，我们发现 Django 应用了这种迁移且一切顺利
+
+#### 向管理网站注册 Entry
+
+我们需要`注册模型 Entry`。为此，需要修改 admin.py
+
+```py
+> cat learning_logs/admin.py
+from django.contrib import admin
+from learning_logs.models import Topic,Entry #-----------新增
+# Register your models here.
+admin.site.register(Topic)
+admin.site.register(Entry) #-----------新增
+```
+现在访问 [admin](localhost:8000/admin/) ，将看到 learning_logs 下列出了 `Entries`。
+
+#### Django shell
+
+输入一些数据后，就可通过交互式终端以编程方式查看这些数据了。这种交互式环境称为 *Django shell* ，是测试项目和排除其故障的理想之地。
+
+下面是一个交互式 shell 会话示例
+
+```sh
+> python manage.py shell
+Python 3.11.3 (main, Apr  5 2023, 15:52:25) [GCC 12.2.1 20230201] on linux
+Type "help", "copyright", "credits" or "license" for more information.
+(InteractiveConsole)
+>>> from learning_logs.models import Topic
+>>> Topic.objects.all()
+<QuerySet [<Topic: Hello>, <Topic: Chess>]>
+>>> topics = Topic.objects.all()
+>>> for topic in topics:
+...     print(topic.id,topic)
+...
+1 Hello
+2 Chess
+```
+
+通过命令 `pyton manage.py shell` 启动一个 python 解释器，可使用它`来探索存储在项目数据库中的数据`
+
+导入模块 `learning_logs.models` 中的模型 `Topic`，然后用方法 `Topic.objects.all()` 来获取模型 Topic 的所有实例，它返回的是一个列表，称为`查询集(queryset)`
+
+我们可以向遍历列表一样遍历查询集。上面的 for 循环演示了如何查看分配给每个主题对象的 ID
+
+我们将返回的查询集存储在 topics 中，然后打印每个主题的 id 和字符串表示。从输出可知：主题 Hello 的 ID 为 1,而 Chess 的 ID 为 2
+
+知道对象的 ID 后，就可获取该对象并查看其任何属性。下面看看主题 Chess 的小户型 text 和 date_added 的值
+
+```sh
+>>> t = Topic.objects.get(id=2)
+>>> t.text
+'Chess'
+>>> t.date_added
+datetime.datetime(2023, 5, 23, 11, 10, 16, 597486, tzinfo=datetime.timezone.utc)
+```
+
+我们还可以查看与主题相关联的条目。前面我们给模型 `Entry` 定义了属性 topic，这是一个 `ForeignKey`，将条目与主题关联起来。
+
+利用这种关联，Django 能够获取与特定主题相关联的所有条目，如下所示
+
+```sh
+>>> t.entry_set.all()
+<QuerySet [<Entry: 当你单击Save时,将返回到主条目管理页面。在这里,你将发现使用text[:50]作为条目的
+字符......>, <Entry: 继续往下开发“学习笔记”时,这三个条目可为我们提供使用的数据。......>]>
+```
+
+为通过外键关系获取数据，可使用相关模型的小写名称、下划线和单词 set,例如：假设你有模型 Pizza 和 Topping，而 Topping 通过一个外键关联到 Pizza,如果你有一个名为 `my_pizza` 的对象，表示一张披萨，就可使用代码 `my_pizza.topping_set.all()` 来获取这张披萨的所有配料
+
+编写用户可请求的网页时，我们将使用这种语法。确认代码能获取所需的数据时，shell 很有帮助。如果代码在 shell 中的行为符合预期，那么他们在项目文件中也能正确地工作。
+
+> 每次修改模型后，都需要重启 shell，这样才能看到修改的效果。
+
+### 创建网页：学习笔记
+
+使用 Django 创建网页的过程通常分为三个阶段：`定义URL`，`编写视图` 和 `编写模板`。
+
+首先，需要定义 URL 模式。URL 模式描述了 URL 是如何设计的，让Django 知道如何将浏览器请求与网站 URL 匹配，以确定返回哪个网页
+
+每个 URL 都被映射到特定的试图————试图函数获取并处理网页所需的数据。试图函数通常调用一个模板，后者声场浏览器能够理解的网页。
+
+#### 映射 URL
+
+用户通过在 浏览器中输入 URL 以及单击连接来请求网页，因此我们需要确定项目需要哪些 URL。
+
+主页的 URL 最重要，它是用户用来访问项目的基础 URL。当然，基础 URL (localhost:8000/) 返回默认的是 Django 网站，让我们知道正确地建立了项目。我们将修改这一点，将这个基础 URL 映射到 ”学习笔记“ 的主页
+
+打开项目主文件夹 `learning_log` 中的文件 `urls.py`
 
