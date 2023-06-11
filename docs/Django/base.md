@@ -12,7 +12,7 @@ Django 是一个 Web 框架，一套用于帮助开发交互式网站的工具�
 
 将项目的库与其他项目分离是有益的，且为了后续将”学习笔记“部署到服务器，这也是必须的
 
-为项目新建一个目录，将其命令为 `learning_log`，再在中断中进入这个目录，并创建一个虚拟环境， python3 可用下行命令创建虚拟环境
+为项目新建一个目录，将其命令为 `learning_log`，再在终端中进入这个目录，并创建一个虚拟环境， python3 可用下行命令创建虚拟环境
 
 ```py
 > python -m venv ll_env
@@ -31,7 +31,7 @@ learning_log$ source ll_env/bin/activate
 
 > 这个命令运行 ll_env/bin/activate 脚本，环境处于活动状态时，环境名将包含在括号内。这种情况下，可以在环境中安装包，并使用已安装的包。在 ll_env 中安装的包仅在该环境处于活动状态时才可用
 
-要轻质使用虚拟环境，可执行命令
+要停止使用虚拟环境，可执行命令
 
 ```py
 (ll_env)learning_log$ deactiviate
@@ -127,7 +127,7 @@ Django 项目由一些列应用程序组成，它们协同工作，让项目成�
 
 我们暂时只创建一个应用程序，它将完成项目的大部分工作。
 
-当前，在前面打开的中断窗口中应该还运行着 runserver 。再打开一个中断，并切换到 `manage.py` 所在的目录。激活该虚拟环境，再执行命令 `startapp`
+当前，在前面打开的终端窗口中应该还运行着 runserver 。再打开一个终端，并切换到 `manage.py` 所在的目录。激活该虚拟环境，再执行命令 `startapp`
 
 ```sh
 > python manage.py startapp learning_logs
@@ -431,3 +431,278 @@ datetime.datetime(2023, 5, 23, 11, 10, 16, 597486, tzinfo=datetime.timezone.utc)
 
 打开项目主文件夹 `learning_log` 中的文件 `urls.py`
 
+```py
+> cat learning_log/urls.py
+"""
+URL configuration for learning_log project.
+
+The `urlpatterns` list routes URLs to views. For more information please see:
+    https://docs.djangoproject.com/en/4.2/topics/http/urls/
+Examples:
+Function views
+    1. Add an import:  from my_app import views
+    2. Add a URL to urlpatterns:  path('', views.home, name='home')
+Class-based views
+    1. Add an import:  from other_app.views import Home
+    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
+Including another URLconf
+    1. Import the include() function: from django.urls import include, path
+    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+"""
+from django.contrib import admin
+from django.urls import path
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+]
+```
+
+之后更改内容如下
+
+```py
+from django.urls import path,include
+from django.contrib import admin
+
+urlpatterns = [
+    path('admin/',admin.site.urls),
+    path('',include('learning_logs.urls')), #--------新增，将 localhost:8000 重定向
+]
+```
+
+然后打开 `learning_logs/urls.py`
+
+```py
+"""定义 learning_logs 的 URL 模式"""
+
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    #主页
+    path("",views.index)
+]
+```
+
+在其中配置路由，`path()`的第一个参数为空串，其代表直接访问 [runserver默认地址](localhost:8000)，链接后面无需加路径
+
+第二个参数`views.index`为视图，在 Django 中表示为一个函数，即浏览器页面
+
+#### 编写视图
+
+试图函数接收请求中的信息，准备好生成网页所需的数据，再将这些数据发送给浏览器———这通常是使用定义了网页是什么样的模板实现的
+
+learning_logs 中的文件 `views.py` 是我们执行 `python manage.py startapp` 后自动生成的，我们在这个文件中编写视图函数
+
+```py
+from django.shortcuts import render, HttpResponse
+# Create your views here.
+def index(request):
+    """学习笔记的主页"""
+ #   return HttpResponse("Hello World!") #可正确返回
+    return render(request,'learning_logs/index.html')
+```
+
+URL 请求与我们刚才定义的路由时，Django 将在文件 `views.py` 中查找函数 index()，再将请求对象传递给这个试图函数。
+
+在这里，我们不处理任何数据，因此这个函数只包含调用 render() 的代码。
+
+> 这里向函数 render() 提供了两个实参：原始请求对象、以及一个可用户创建网页的模板
+
+#### 编写模板
+
+模板定义了网页的结构。模板指定了网页是什么样的，每当网页被请求时，Django 将填入相关的数据。
+
+在 `learning_logs/templates/learning_logs/index.html` 中编写模板，虽然路径有点多余，但 Django 能够明确解读这种结构，即便项目很大，包含很多应用程序亦如此。
+
+index.html 内容如下
+
+```py
+<p>Learning_log</p>
+<p>Learning_log</p>
+Lorem ipsum dolor sit amet, officia excepteur ex fugiat reprehenderit enim labore culpa sint ad nisi Lorem pariatur mollit ex esse exercitation amet. Nisi anim cupidatat excepteur officia. Reprehenderit nostrud nostrud ipsum Lorem est aliquip amet voluptate voluptate dolor minim nulla est proident. Nostrud officia pariatur ut officia. Sit irure elit esse ea nulla sunt ex occaecat reprehenderit commodo officia dolor Lorem duis laboris cupidatat officia voluptate. Culpa proident adipisicing id nulla nisi laboris ex in Lorem sunt duis officia eiusmod. Aliqua reprehenderit commodo ex non excepteur duis sunt velit enim. Voluptate laboris sint cupidatat ullamco ut ea consectetur et est culpa et culpa duis.
+```
+
+现在，访问这个项目的基础 URL [here](localhost:8000)，将看到刚才创建的网页,而不是默认的 Django 页面。
+
+![index](../images/django/namespace_none.png) 
+
+创建网页的过程看起来复杂，但将 URL、视图和模板分离的效果实际上很好。这让我们能够分别考虑项目的不同方面
+
+### 创建其他网页
+
+现在可以扩充 ”学习笔记“ 项目了。我们将创建两个显示数据的网页，其中一个列出所有的主题，另一个显示特定主题的所有条目。
+
+对于每个网页，我们都将指定 URL 模式，编写一个视图函数，编写一个模板。
+
+但这样做之前，我们先创建一个父模板，项目中的其他模板都将继承他
+
+#### 模板继承
+
+创建网站时，几乎都有一些所有网页都将包含的元素。在这种情况下，可编写一个包含通用元素的父模板，并让每个网页都继承这个模板，而不必在每个网页中重复定义这些通用元素。
+
+1. 父模板
+
+我们首先创建一个名为 base.html 的模板，并将其存储在 index.html 所在目录下。
+
+这个文件包含所有页面都有的元素，其他的模板都继承 base.html。当前，所有页面都包含的元素只有顶端的标题。我们在每个页面中都包含这个模板，因此我们将这个表示设置为到主页的链接
+
+```html
+> cat learning_logs/templates/learning_logs/base.html
+<p>
+    <a href="{% url 'learning_logs:index' %}">LLLearning log</a>
+</p>
+{% block content %}{% endblock content %}
+```
+
+该文件的第一部分创建一个包含项目名的段落，该段落也是一个到主页的链接。为创建链接，我们使用了一个 `模板标签`
+
+> 模板标签是一小段代码，生成要在网页中显示的信息。它由 `{% %}` 表示。
+
+在这个文件中，模板标签 `{% url 'learning_logs:index' %}` 生成一个 URL,该 URL 与 learning_logs/urls.py 中定义的名为 index 的 URL 模式匹配。
+
+在这里示例中，learning_logs 是一个命令空间，而 index 是该命令空间中一个名称独特的 URL 模式。
+
+
+让模板标签来生成 URL,可让链接保持最新容易的多。要修改项目中的 URL，只需修改 urls.py 中的 URL 模式，这样网页被请求时，Django 将自动插入修改后的 URL. 我们的项目中，每个网页都将继承 base.html, 因此，从现在开始，每个网页都包含到主页的链接
+
+base.html 的最后一行，我们插入了一对块标签。这个块名为 `content`,是一个占位符，其中包含的信息将由子模板指定。
+
+之模板并非必须定义父模板中的每个块，因此在父模板中，可使用任意多个块来预留空间，而子模板可根据需要定义相应数量的块
+
+2. 子模板
+
+现在需要重新编写 index.html,使其继承 base.html
+
+```py
+> cat learning_logs/templates/learning_logs/index.html
+{% extends "learning_logs/base.html" %}
+
+{% block content %}
+    <p>LLLLLearning Log hepls you keep track of your learning,for any topic you're learning about.</p>
+{% endblock content %}
+```
+
+子模板首行必须包含标签 `{% extends %}`，让 Django 知道它继承了哪个父模板。文件 base.html 位于 `learning_logs/base.html`，因此父模板路径中包含 learning_logs，这行代码导入模板 base.html 的所有内容，让 index.html 能够指定要在 content 块预留的空间中添加的内容
+
+之后，是一个i而名为 content 的 `{% block %}` 标签，以定义 content 块。不是从父模板继承的内容都包含在 content 块中，在这里是一个描述项目 ”学习笔记“ 的段落。使用标签 `{% endblock content %}` 指出了内容定义的结束位置
+
+#### 显示所有主题的页面
+
+有了高效的网页创建方法，就能专注于另外两个网页了：显示全部主题的网页、显示特定主题条目的网页。所有主题页面显示用户创建的所有主题，它是第一个需要使用数据的网页
+
+1. URL 模式
+
+首先爱你，我们定义显示所有主题的页面的 URL.通常，使用一个简单的 URL 片段来指出网页显示的信息：我们使用单词 topics,因此 URL `localhost:8000/topics/` 将返回显示所有主题的页面。
+
+```py
+> cat learning_logs/urls.py
+"""定义 learning_logs 的 URL 模式"""
+from django.urls import path
+from . import views
+urlpatterns = [
+    #主页
+    path("",views.index),
+
+    # 显示所有主题
+    path("topics/",views.topics),
+]
+```
+
+基础 URL 后面跟着 topics，。可以在末尾包含斜杠，也可以省略它。其 URL 与该模式匹配的请求都将交给 views.py 中的函数 topics() 处理
+
+2. 视图
+
+函数 topics() 需要从数据库中获取一些数据，并将其发送给模板。
+
+```py
+> cat learning_logs/views.py
+from django.shortcuts import render, HttpResponse
+from .models import Topic
+                                            
+def index(request):
+    """学习笔记的主页"""
+    return render(request,'learning_logs/index.html')
+
+def topics(request):
+    """显示所有主题"""
+    topics = Topic.objects.order_by('date_added')
+    context = {'topics':topics}
+    return render(request,'learning_logs/topics.html',context)
+```
+
+首先导入了与所需数据关联的模型，函数 topics() 包含一个型参：Django 从服务器接收到的 request 对象。
+
+我们查询数据库————请求提供 Topic 对象，并按属性 date_added 对他们进行排序。我们将返回的查询集存储在 topic 中
+
+之后定义了一个将要发送给模板的上下文。上下文是一个字典，其 key 是我们将在模板中用来访问数据的名称，value 是我们要发送给模板的数据。
+
+在这里，只有一个键值对，它包含我们将在网页中显示的一组主题。创建使用数据的网页时，处对象 request 和模板的路径外，我们还将 content 传递给 render
+
+3. 模板
+
+显示所有主题的页面的模板接收字典 context，以便能够使用 topics() 提供的数据。现在创建 topics.html
+
+```py
+> cat learning_logs/templates/learning_logs/topics.html
+{% extends "learning_logs/base.html" %}
+
+{% block content %}
+    <p>Topics</p>
+    <ul>
+        {% for topic in topics %}
+            <li>{{ topic }}</li>
+        {% empty %}
+            <li>No topics have been added yet.</li>
+        {% endfor %}
+    </ul>
+{% endblock content %}
+```
+
+其中我们使用了一个相当于 for 循环的模板标签，它遍历字典 context 中的列表 topics.
+
+> 模板中使用的代码不同于 python,python 使用缩进来指出哪些代码是 for 循环的组成部分，而在模板中，每个 for 循环必须使用 `{% endfor %}` 标签来显式地指出其结束位置
+
+在循环中，我们要将每个主题转为一个项目列表项。要在模板中打印变量，需要将变量名用双花括号括起来。每次循环时 `{{ topic }}` 都被替换为 topic 的当前值。
+
+而模板标签 `{% empty %}`，它告诉 Django 在列表 topics 为空时该怎么办：这里是打印一条消息，告诉用户还没有添加爱任何主题
+
+现在修改父模板，使其包含到显示所有主题的页面的链接
+
+```py
+> cat learning_logs/templates/learning_logs/base.html
+<p>
+    <a href="{% url 'learning_logs:index' %}">LLLearning log</a>
+    <a href="{% url 'learning_logs:topics' %}">Topics</a>
+</p>
+
+{% block content %}{% endblock content %}
+```
+
+现在刷新浏览器中的主页，
+
+#### 显示特定主题的页面
+
+现在我们要创建一个专注于特定主题的页面————显示该主题的名称及该主题的所有条目。同样，我们将定义一个新的 URL 模式，编写一个视图并创建一个模板。
+
+我们还将修改显示所有主题的网页，让每个项目列表向都是一个链接，单击它将显示相应主题的所有条目
+
+1. URL 模式
+
+显示特定主题的页面的 URL 模式与前面的所有 URL 模式都不同，因为它将使用主题的 id 属性来指出请求的是哪个主题。
+
+```py
+> cat learning_logs/urls.py
+"""定义 learning_logs 的 URL 模式"""
+from django.urls import path,re_path
+from . import views
+app_name='learning_logs' #---------------新增
+urlpatterns = [
+    #主页
+    path("",views.index,name="index"), # path() 的 name 参数是必须的，用于解析模板网页
+    #    path("index/",views.index,name="index"),
+    # 显示所有主题
+    path("topics/",views.topics,name="topics"),
+    # 特定主题的详细页面
+    re_path(r'^topics/(?P<topic_id>\d+)/$',views.topic,name="topic"),
+]
+```

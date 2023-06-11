@@ -46,3 +46,34 @@ mysite/
 python manage.py runserver
 #默认监听 localhost:8000
 ```
+
+## views && urls
+
+
+在 app/ 的 views.py 中定义视图
+
+在 project/urls.py 中关联 app/ 下的 urls.py
+
+以下截图解释
+
+![project](../images/django/project_urls.png) 
+
+![app_url](../images/django/app_urls_and_views.png) 
+
+![views](../images/django/views_and_render.png) 
+
+![templates](../images/django/app_templates_site.png) 
+
+![broser](../images/django/broser_request.png) 
+
+### 修改项目目录下的路由关联
+
+![index](../images/django/broswer_root.png) 
+
+![index_root](../images/django/broswer_request.png) 
+
+- 去掉路由 index 的方法
+
+![app_namespace](../images/django/app_urls_namespace_none.png) 
+
+![app](../images/django/namespace_none.png) 
