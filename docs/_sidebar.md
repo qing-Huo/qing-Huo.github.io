@@ -1,5 +1,6 @@
 - [**首页**](/README.md)
 - [git](/questionOfTheDay/gitcommand.md)
+- [GDB](/questionOfTheDay/gdb_use.md)
 - [tmux](/questionOfTheDay/tmux.md)
 - [Python](/pyMD/)
 - [Django](/Django/)
